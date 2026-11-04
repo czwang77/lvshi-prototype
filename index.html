@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>绿拾 · 低碳闲置交换 APP</title>
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{background:#EAF2ED;display:flex;align-items:center;justify-content:center;overflow:hidden;
+       font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif}
+  .phone{position:relative;width:min(calc((100vh - 28px) * .4621), 416px);
+         aspect-ratio:390/844;flex:none;border-radius:32px;overflow:hidden;background:#fff;
+         box-shadow:0 18px 60px rgba(20,108,67,.16),0 0 0 8px #fff,0 0 0 9px #CFE3D6}
+  .screen{position:absolute;inset:0;width:100%;height:100%;display:block;user-select:none;-webkit-user-drag:none}
+  .hot{position:absolute;border-radius:8px;background:transparent;border:0;cursor:pointer;transition:background .12s}
+  @media (hover:hover){ .hot:hover{background:rgba(30,158,98,.16)} }
+  .hot:active{background:rgba(30,158,98,.28)}
+  @media (max-width:560px){
+    body{background:#fff}
+    .phone{width:100vw;height:100dvh;aspect-ratio:auto;border-radius:0;box-shadow:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="phone" id="phone">
+  <img class="screen" id="screen" alt="高保真界面">
+  <div id="hots"></div>
+</div>
+
+<script>
+/* ===== 页面清单 ===== */
+const PAGES = ['login','profile','publish1','publish2','publish3','myitems','match','matchwhy',
+               'detail','invite','home','search','nearby','chats','chat','handover','progress',
+               'carbon','footprint','growth'];
+const IDX = {}; PAGES.forEach((k,i)=>IDX[k]=i);
+const START = 'login';
+
+/* ===== 热区：逻辑坐标 390×844，[x, y, w, h, 目标, 标签] ===== */
+const BACK = [20,52,48,48,'back','返回上一页'];
+const TABBAR = [
+  [0,756,78,82,'home','标签栏 · 首页'],
+  [78,756,78,82,'nearby','标签栏 · 附近'],
+  [156,756,78,82,'publish1','标签栏 · 发布'],
+  [234,756,78,82,'chats','标签栏 · 消息'],
+  [312,756,78,82,'profile','标签栏 · 我的'],
+];
+const T = s => 'toast:' + s;
+
+const HOTS = {
+ home:[
+  [16,44,200,40,'nearby','定位 · 查看附近'], [326,50,36,36,'profile','个人中心'],
+  [24,104,342,40,'search','搜索附近的闲置'],
+  [26,176,56,32,'search','分类 · 全部'], [92,176,84,32,'search','分类 · 家居用品'],
+  [186,176,84,32,'search','分类 · 数码电子'], [280,176,84,32,'search','分类 · 图书文具'],
+  ...[256,377,498,619].map(y=>[26,y,338,108,'detail','查看物品详情']),
+  ...TABBAR],
+ nearby:[
+  [24,52,342,40,'search','搜索附近的闲置'],
+  [97,211,26,26,'detail','地图交换点'], [245,293,26,26,'detail','地图交换点'],
+  [293,167,26,26,'detail','地图交换点'], [93,411,34,34,'detail','选中的交换点'],
+  ...[548,610,672].map(y=>[24,y,342,60,'detail','查看附近物品']),
+  ...TABBAR],
+ search:[
+  BACK, [56,56,306,40,T('搜索词输入为视觉原型占位'),'搜索框'],
+  ...[26,108,190,272].map((x,i)=>[x,120,[74,74,74,56][i],30,T('筛选条件为视觉原型占位'),'筛选条件']),
+  [330,118,40,32,T('筛选面板为视觉原型占位'),'筛选'],
+  ...[178,336,494].map(y=>[26,y,338,146,'detail','查看物品详情']),
+  ...TABBAR],
+ chats:[
+  [330,54,40,44,'search','搜索会话'],
+  ...[0,1,2,3,4,5,6].map(i=>[24,124+84*i,342,80,'chat','打开协商对话']),
+  ...TABBAR],
+ chat:[
+  BACK, [332,54,40,44,T('更多操作为视觉原型占位'),'更多'],
+  [20,128,350,92,'detail','查看协商物品'],
+  [20,630,350,96,'handover','约定交接地点'],
+  [16,768,286,40,T('消息输入为视觉原型占位'),'输入消息'],
+  [316,768,40,40,T('发送为视觉原型占位'),'发送']],
+ handover:[
+  BACK, [20,494,350,84,T('交接码扫码在完整版中完成'),'交接码'],
+  [24,712,342,48,'progress','确认交接 · 查看进度']],
+ progress:[
+  BACK, [20,400,350,90,T('过程记录为展示性内容'),'过程记录'],
+  [24,712,165,48,'chat','联系对方'],
+  [201,712,165,48,'handover','查看交接码']],
+ carbon:[
+  [270,90,110,150,'growth','查看成长与成就'],
+  ...[380,464,548,632].map(y=>[64,y,302,58,'footprint','查看单次碳足迹']),
+  ...TABBAR],
+ footprint:[
+  BACK, [24,546,342,140,T('等效换算为说明性数据'),'等效换算']],
+ growth:[
+  BACK, [24,306,342,220,T('徽章点亮规则见设计说明'),'徽章墙'],
+  [24,712,342,48,'home','去交换一件闲置']],
+ login:[
+  [32,380,326,52,T('手机号输入为视觉原型占位'),'手机号'],
+  [32,448,196,52,T('验证码输入为视觉原型占位'),'验证码'],
+  [240,448,118,52,T('验证码已发送（示意）'),'获取验证码'],
+  [32,524,326,56,'home','登录 / 注册'],
+  [30,600,24,24,T('已阅读并同意协议'),'协议勾选'],
+  ...[115,175,235].map(x=>[x,680,40,40,T('第三方登录为视觉原型占位'),'第三方登录'])],
+ profile:[
+  [24,210,342,86,T('交换数据统计'),'统计卡'],
+  [24,312,342,84,'carbon','累计减碳 · 查看账本'],
+  [24,420,342,52,'myitems','我的发布'],
+  [24,476,342,52,'progress','我的交换记录'],
+  [24,532,342,52,T('收藏列表为视觉原型占位'),'我的收藏'],
+  [24,588,342,52,T('偏好与地址设置'),'交换偏好与地址'],
+  [24,644,342,52,T('实名与信用详情'),'实名与信用'],
+  ...TABBAR],
+ publish1:[
+  [12,54,64,44,'home','取消发布'], [326,54,52,44,T('已存草稿（示意）'),'草稿'],
+  [24,164,342,236,T('拍照 / 相册为视觉原型占位'),'上传图片'],
+  [24,446,342,50,T('填写物品名称与描述'),'物品信息'],
+  [24,534,342,50,T('选择成色'),'成色'],
+  [24,748,342,56,'publish2','下一步 · 选择交换偏好']],
+ publish2:[
+  [12,54,64,44,'home','取消发布'],
+  ...[176,236,296].map(y=>[24,y,342,50,T('交换偏好选项'),'希望换到']),
+  ...[24,136,248].map(x=>[x,366,104,40,T('交接方式选项'),'交接方式']),
+  [24,748,342,56,'publish3','下一步 · 预览确认']],
+ publish3:[
+  BACK, [24,712,342,48,'myitems','确认发布']],
+ myitems:[
+  [12,54,48,44,'back','返回'], [330,54,48,44,T('管理模式为视觉原型占位'),'管理'],
+  ...[0,1,2,3].map(i=>[24+82*i,124,82,30,T('状态筛选'),'状态筛选']),
+  ...[172,334,496].map(y=>[24,y,342,150,'detail','查看物品详情']),
+  [24,676,342,48,'publish1','发布新的闲置'],
+  [24,736,342,48,'match','去看看想换什么']],
+ match:[
+  [24,316,342,42,'matchwhy','匹配度 92% · 查看依据'],
+  ...[398,460,522].map(y=>[24,y,342,58,'matchwhy','查看匹配依据']),
+  [24,748,120,54,T('换一批推荐（示意）'),'换一个'],
+  [156,748,210,54,'invite','发起交换请求']],
+ matchwhy:[
+  BACK, [24,712,342,48,'invite','去发起交换']],
+ detail:[
+  [30,56,32,32,'back','关闭'], [328,56,32,32,T('已收藏（示意）'),'收藏'],
+  [26,570,338,84,T('查看对方想换清单'),'期望交换'],
+  [24,766,150,44,'chat','聊一聊'],
+  [190,766,176,44,'invite','发起交换']],
+ invite:[
+  BACK,
+  ...[254,330,406].map(y=>[24,y,342,64,T('选择要换出的闲置'),'我的物品']),
+  [24,510,342,72,T('留言输入为视觉原型占位'),'留言'],
+  [24,712,342,48,'chats','发送交换请求']],
+};
+
+/* ===== 渲染：只渲染能真正跳转的热区，占位项不生成，避免点了没反应 ===== */
+let cur = START, stack = [];
+const $ = id => document.getElementById(id);
+
+function render(){
+  $('screen').src = 'img/' + cur + '.png';
+  $('hots').innerHTML = (HOTS[cur]||[]).filter(h=>!String(h[4]).startsWith('toast:')).map(h=>{
+    const [x,y,w,ht,target] = h;
+    return '<button class="hot" data-t="'+target+'" aria-label="'+h[5]+'" style="left:'+(x/390*100)+'%;top:'+(y/844*100)+'%;width:'+(w/390*100)+'%;height:'+(ht/844*100)+'%"></button>';
+  }).join('');
+  $('hots').querySelectorAll('.hot').forEach(b=>b.onclick=()=>hit(b.dataset.t));
+  if(location.hash !== '#p='+cur) history.replaceState(null,'', '#p='+cur);
+}
+function go(k){
+  if(!IDX.hasOwnProperty(k)) return;
+  if(cur !== k) stack.push(cur);
+  cur = k; render();
+}
+function hit(target){
+  if(target === 'back'){
+    if(stack.length){ cur = stack.pop(); render(); }
+    return;
+  }
+  go(target);
+}
+window.addEventListener('popstate', ()=>{
+  const k = (location.hash.match(/^#p=(\w+)/)||[])[1];
+  if(k && IDX.hasOwnProperty(k)){ cur = k; render(); }
+});
+
+const init = (location.hash.match(/^#p=(\w+)/)||[])[1];
+cur = (init && IDX.hasOwnProperty(init)) ? init : START;
+render();
+</script>
+</body>
+</html>
